@@ -204,6 +204,7 @@ class ScrapeMusixMatch:
 
     def __get_data(self):
         categories_urls = [f"{self.url}{chr(c + 65)}" for c in range(26)]
+        categories_urls.append(f"{self.url}0-9")
         categories_data = []
         for category in categories_urls:
             categories_data.extend(self.__get_category_data(category))
