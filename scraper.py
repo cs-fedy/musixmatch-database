@@ -7,7 +7,6 @@ import time
 # TODO: fix encoding problem: extracting data using beautifulSoup
 # TODO: fix element is not clickable and get all translations urls
 # TODO: fix element is not clickable and get all albums
-# TODO: debug the scraper
 
 
 def create_headless_browser():
@@ -42,17 +41,18 @@ class ScrapeSongLyrics:
         # * get song writer:
         song_writer = soup.select_one(".mxm-lyrics__copyright").getText()
 
-        # * album release date:
-        album_release_date = soup.select_one(".mui-cell__subtitle").getText()
-
         return {
             "song_title": song_title,
-            "song_writer": song_writer,
-            "album_release_date": album_release_date
+            "song_writer": song_writer
         }
 
     @staticmethod
     def __get_song_lyrics(source_code):
+        if "Instrumental" in source_code:
+            return "Instrumental"
+        elif "Lyrics not available." in source_code:
+            return "Lyrics not available."
+
         soup = BeautifulSoup(source_code, "html.parser")
         lyrics_elements = soup.select(".mxm-lyrics__content")
         lyrics = [lyrics_element.getText() for lyrics_element in lyrics_elements]
@@ -60,9 +60,9 @@ class ScrapeSongLyrics:
 
     def __get_translations_urls(self):
         soup = BeautifulSoup(self.browser.page_source, "html.parser")
-        links_elements = soup.select(".other_translations a")[1:]
-        links = [f"https://www.musixmatch.com{element['href']}" for element in links_elements]
-        return links
+        return [f"https://www.musixmatch.com{link['href']}"
+                for link in soup.select(".base_translations a")
+                if "translations" not in link]
 
     def __get_translations(self):
         translation_urls = self.__get_translations_urls()
@@ -92,7 +92,12 @@ class ScrapeSongLyrics:
         source_code = load_full_page(self.browser, self.song_url)
         lyrics = self.__get_song_lyrics(source_code)
         song_details = self.__get_song_data(source_code)
-        translations = self.__get_translations()
+        if lyrics == "Instrumental" or lyrics == "Lyrics not available.":
+
+            translations = "undefined"
+        else:
+            translations = self.__get_translations()
+
         return {
             "default_lyrics": lyrics,
             "details": song_details,
@@ -103,6 +108,7 @@ class ScrapeSongLyrics:
 class ScrapeArtistsProfile:
     def __init__(self, artist_url, browser=None):
         self.artist_profile_url = artist_url
+        self.albums_page_url = f"{self.artist_profile_url}/albums"
         if not browser:
             self.browser = create_headless_browser()
         else:
@@ -137,45 +143,35 @@ class ScrapeArtistsProfile:
         }
 
     def __get_albums_details(self):
-        albums_page_url = f"{self.artist_profile_url}/albums"
-        load_full_page(self.browser, albums_page_url)
+        load_full_page(self.browser, self.albums_page_url)
         # self.browser.find_element_by_css_selector(".load-more-pager").click()
         # time.sleep(1)
         soup = BeautifulSoup(self.browser.page_source, "html.parser")
         # * get albums data
-        albums_cards = soup.select(".album-card")
-        albums = [self.__get_album_details(album_card) for album_card in albums_cards]
-        return albums
+        albums_urls = [f"https://www.musixmatch.com{album['href']}"
+                       for album in soup.select(".media-card-title a")]
+        return [self.__get_album_details(album_url) for album_url in albums_urls]
 
-    def __get_album_details(self, soup):
-        album_pict_list = soup.find("img")["srcset"].split(", ")
-        album_pictures = []
-        for album_pict in album_pict_list:
-            pict_url, size = album_pict.split()
-            if not pict_url.startswith("https:"):
-                pict_url = "https:" + pict_url
-            album_pictures.append({"size": size, "url": pict_url})
-
-        album_title_element = soup.select_one("h2 a")
-        album_title = album_title_element.getText()
-        songs_data = self.__get_songs_data(album_title_element["href"])
-        return {
-            "album_pictures": album_pictures,
-            "album_title": album_title,
-            "songs_data": songs_data
-        }
-
-    def __get_songs_data(self, sub_url):
-        album_url = f"https://www.musixmatch.com{sub_url}"
+    def __get_album_details(self, album_url):
         source_code = load_full_page(self.browser, album_url)
         soup = BeautifulSoup(source_code, "html.parser")
-        songs = soup.select(".mui-collection__item a")
-        songs_details = []
-        for song in songs:
-            song_url = f"https://www.musixmatch.com{song['href']}"
+        album_pict = soup.select_one(".mxm-album-banner__coverart img")["src"]
+
+        album_title = soup.select_one(".mxm-album-banner__name").getText()
+        album_release_date = soup.select_one(".mxm-album-banner__release")
+        songs_urls = [f"https://www.musixmatch.com{song['href']}"
+                      for song in soup.select(".mxm-album__tracks .mui-collection__item a")]
+        songs_data = []
+        for song_url in songs_urls:
             ssl = ScrapeSongLyrics(song_url, self.browser)
-            songs_details.append(ssl())
-        return songs_details
+            songs_data.append(ssl())
+
+        return {
+            "album_pictures": album_pict,
+            "album_title": album_title,
+            "songs_data": songs_data,
+            "album_release_date": album_release_date
+        }
 
     def __get_data(self):
         source_code = load_full_page(self.browser, self.artist_profile_url)
