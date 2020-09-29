@@ -113,7 +113,6 @@ class ScrapeArtistsProfile:
             self.browser = create_headless_browser()
         else:
             self.browser = browser
-        self.__get_data()
 
     @staticmethod
     def __scrape_profile_details(source_code):
@@ -173,20 +172,46 @@ class ScrapeArtistsProfile:
             "album_release_date": album_release_date
         }
 
-    def __get_data(self):
+    def __call__(self):
         source_code = load_full_page(self.browser, self.artist_profile_url)
         profile_details = self.__scrape_profile_details(source_code)
         albums_details = self.__get_albums_details()
+        return {
+            "profile_details": profile_details,
+            "album_details": albums_details
+        }
+
+
+class ScrapeMusixMatch:
+    def __init__(self, browser=None):
+        self.url = "https://www.musixmatch.com/artists/"
+        if not browser:
+            self.browser = create_headless_browser()
+        else:
+            self.browser = browser
+        self.__get_data()
+
+    def __get_category_data(self, url):
+        source_code = load_full_page(self.browser, url)
+        soup = BeautifulSoup(source_code, "html.parser")
+        artists_links = [f"https://www.musixmatch.com{artist['href']}"
+                         for artist in soup.select(".mxm-artist-index-link a")]
+        artists_data = []
+        for link in artists_links:
+            sap = ScrapeArtistsProfile(link, self.browser)
+            artists_data.append(sap())
+        return artists_data
+
+    def __get_data(self):
+        categories_urls = [f"{self.url}{chr(c + 65)}" for c in range(26)]
+        categories_data = []
+        for category in categories_urls:
+            categories_data.extend(self.__get_category_data(category))
 
         with open(r"data.json", mode="w+") as file:
-            data = {
-                "profile_details": profile_details,
-                "album_details": albums_details
-            }
-            json.dump(data, file)
+            json.dump(categories_data, file)
 
 
 if __name__ == "__main__":
-    url = "https://www.musixmatch.com/artist/Disturbed"
     headless_browser = create_headless_browser()
-    sam = ScrapeArtistsProfile(url, headless_browser)
+    sam = ScrapeMusixMatch(headless_browser)
