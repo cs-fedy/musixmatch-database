@@ -65,7 +65,7 @@ class ScrapeArtistsProfile:
             songs_data.append(ssl())
 
         return {
-            "album_pictures": album_pict,
+            "album_picture": album_pict,
             "album_title": album_title,
             "songs_data": songs_data,
             "album_release_date": album_release_date
@@ -77,7 +77,7 @@ class ScrapeArtistsProfile:
         albums_details = self.__get_albums_details()
         return {
             "profile_details": profile_details,
-            "album_details": albums_details
+            "albums_details": albums_details
         }
 
 
