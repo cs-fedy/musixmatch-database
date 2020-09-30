@@ -1,6 +1,7 @@
 from selenium import webdriver
 from bs4 import BeautifulSoup
-from helpers import *
+from scraper.scrape_artists_profile import ScrapeArtistsProfile
+from scraper.helpers import *
 import json
 
 

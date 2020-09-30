@@ -1,5 +1,7 @@
 from bs4 import BeautifulSoup
-from helpers import *
+from scraper.helpers import *
+from scraper.scrape_song_lyrics import ScrapeSongLyrics
+import json
 
 
 class ScrapeArtistsProfile:
