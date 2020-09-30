@@ -152,7 +152,7 @@ class DB:
             """
             self.cursor.execute(seeding_translation_query)
             self.connection.commit()
-            print(f"seeding song table with {song_title} translation to {language=} details done")
+            print(f"seeding translation table with {song_title} translation to {language=} details done")
 
     def __seed_album_table(self, index, albums):
         for album_id, album in enumerate(albums):
