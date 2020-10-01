@@ -8,9 +8,6 @@ load_dotenv(dotenv_path=r"../.env")
 
 
 # TODO: store lyrics and translations using AWS
-# TODO: refactor schema
-# TODO: add on delete cascade to db schema
-# TODO: debug the script
 
 
 class DB:
@@ -18,6 +15,8 @@ class DB:
         self.__POSTGRES_DB = os.getenv("POSTGRES_DB")
         self.__POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
         self.__POSTGRES_USER = os.getenv("POSTGRES_USER")
+        self.__current_album_id = 0
+        self.__current_song_id = 0
 
     def __connect(self):
         try:
@@ -48,7 +47,7 @@ class DB:
         genre_table_query = '''
                 CREATE TABLE genre(
                     genre_id INT PRIMARY KEY NOT NULL,
-                    artist_id INT NOT NULL,
+                    artist_id INT NOT NULL ON DELETE CASCADE,
                     genre_label TEXT NOT NULL,
                     FOREIGN KEY (artist_id) REFERENCES artist(artist_id)); 
         '''
@@ -57,7 +56,7 @@ class DB:
         album_table_query = '''
                 CREATE TABLE album(
                     album_id INT PRIMARY KEY NOT NULL,
-                    artist_id INT NOT NULL,
+                    artist_id INT NOT NULL ON DELETE CASCADE,
                     album_pict TEXT,
                     album_title TEXT NOT NULL,
                     album_release_data TEXT,
@@ -68,7 +67,7 @@ class DB:
         song_table_query = '''
                 CREATE TABLE song(
                     song_id INT PRIMARY KEY NOT NULL,
-                    album_id INT NOT NULL,
+                    album_id INT NOT NULL ON DELETE CASCADE,
                     song_title TEXT NOT NULL,
                     song_writer TEXT,
                     song_lyrics TEXT NOT NULL,
@@ -79,7 +78,7 @@ class DB:
         song_translation_table_query = '''
                 CREATE TABLE song_translation(
                     translation_id INT PRIMARY KEY NOT NULL,
-                    song_id INT NOT NULL,
+                    song_id INT NOT NULL ON DELETE CASCADE,
                     translation_language TEXT NOT NULL,
                     translation TEXT NOT NULL,
                     FOREIGN KEY (song_id) REFERENCES song(song_id)); 
@@ -125,19 +124,20 @@ class DB:
         print(f"seeding artist table with {profile_name} details done")
 
     def __seed_song_table(self, album_id, songs):
-        for song_id, song in enumerate(songs):
+        for song in songs:
             default_lyrics, details, translations = song.values()
             song_title, song_writer = details.values()
             seeding_song_query = f""" 
                     INSERT INTO artist (song_id, album_id, song_title, song_writer, song_lyrics)  
-                    VALUES ({song_id},{album_id}, {song_title}, {song_writer}, {default_lyrics})
+                    VALUES ({self.__current_song_id},{album_id}, {song_title}, {song_writer}, {default_lyrics})
             """
             self.cursor.execute(seeding_song_query)
             self.connection.commit()
 
             # seed translation table with songs translations
-            self.__seed_translation_table(song_id, song_title, translations)
+            self.__seed_translation_table(self.__current_song_id, song_title, translations)
             print(f"seeding song table with {song_title} details done")
+            self.__current_song_id += 1
 
     def __seed_translation_table(self, song_id, song_title, translations):
         if isinstance(translations, str):
@@ -156,18 +156,19 @@ class DB:
             print(f"seeding translation table with {song_title} translation to {language=} details done")
 
     def __seed_album_table(self, index, albums):
-        for album_id, album in enumerate(albums):
+        for album in albums:
             album_picture, album_title, songs_data, album_release_date = album.values()
             seeding_album_query = f""" 
                     INSERT INTO artist (album_id, artist_id, album_pict, album_title, album_release_date)  
-                    VALUES ({index},{album_id}, {index}, {album_picture}, {album_title}, {album_release_date})
+                    VALUES ({index},{self.__current_album_id}, {index}, {album_picture}, {album_title}, {album_release_date})
             """
             self.cursor.execute(seeding_album_query)
             self.connection.commit()
 
             # seed songs table with album songs
-            self.__seed_song_table(album_id, songs_data)
+            self.__seed_song_table(self.__current_album_id, songs_data)
             print(f"seeding album table with {album_title} album done")
+            self.__current_album_id += 1
 
     def __seed_db(self):
         if not self.connection:
@@ -189,14 +190,26 @@ class DB:
             self.connection.commit()
             print(f"table {table_name} dropped")
 
-    def __get_data(self):
-        pass
+    def __get_data(self, table_name):
+        if not self.connection:
+            return
+
+        row_select_query = f"SELECT * FROM {table_name}"
+        self.cursor.execute(row_select_query)
+        rows = [row[0] for row in self.cursor.fetchall()]
+        columns_select_query = f"SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{table_name}';"
+        self.cursor.execute(columns_select_query)
+        columns = [col[0] for col in self.cursor.fetchall()]
+        print("="*28, f"@ rows in {table_name} table @", "="*28)
+        print(tabulate.tabulate(rows, headers=columns, tablefmt="psql"))
+        print("\n")
 
     def __call__(self):
         self.__connect()
         self.__drop_tables(["album", "artist", "genre", "song", "song_translation"])
         self.__create_tables()
         self.__seed_db()
+        self.__get_data("album")
         self.__close_connection()
 
 
