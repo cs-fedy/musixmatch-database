@@ -1,3 +1,4 @@
+tabulate
 selenium
 beautifulsoup4
 python-dotenv

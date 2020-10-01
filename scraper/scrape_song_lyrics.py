@@ -2,6 +2,9 @@ from scraper.helpers import *
 from bs4 import BeautifulSoup
 import json
 
+# TODO: fix scraping translations
+# TODO: fix getting translation language
+
 
 class ScrapeSongLyrics:
     def __init__(self, song_url, browser=None):
@@ -18,7 +21,10 @@ class ScrapeSongLyrics:
         song_title = soup.select_one("h1").getText()
 
         # * get song writer:
-        song_writer = soup.select_one(".mxm-lyrics__copyright").getText()
+        if "Instrumental" in source_code or "Lyrics not available." in source_code:
+            song_writer = "undefined"
+        else:
+            song_writer = soup.select_one(".mxm-lyrics__copyright").getText()
 
         return {
             "song_title": song_title,

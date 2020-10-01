@@ -58,7 +58,8 @@ class ScrapeArtistsProfile:
         album_title = soup.select_one(".mxm-album-banner__name").getText()
         album_release_date = soup.select_one(".mxm-album-banner__release")
         songs_urls = [f"https://www.musixmatch.com{song['href']}"
-                      for song in soup.select(".mxm-album__tracks .mui-collection__item a")]
+                      for song in soup.select(".mxm-album__tracks .mui-collection__item a")
+                      if song.find("h2")]
         songs_data = []
         for song_url in songs_urls:
             ssl = ScrapeSongLyrics(song_url, self.browser)

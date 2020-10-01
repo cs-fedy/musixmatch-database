@@ -1,6 +1,7 @@
 import psycopg2
 from dotenv import load_dotenv
-from scraper.scraper import ScrapeMusixMatch
+from scraper.data_scraper import ScrapeMusixMatch
+import tabulate
 import os
 
 load_dotenv(dotenv_path=r"../.env")
@@ -181,8 +182,19 @@ class DB:
             self.__seed_album_table(index, artist_albums)
             print("\n")
 
+    def __drop_tables(self, tables_names):
+        for table_name in tables_names:
+            drop_table_query = f"DROP TABLE IF EXISTS {table_name} CASCADE"
+            self.cursor.execute(drop_table_query)
+            self.connection.commit()
+            print(f"table {table_name} dropped")
+
+    def __get_data(self):
+        pass
+
     def __call__(self):
         self.__connect()
+        self.__drop_tables(["album", "artist", "genre", "song", "song_translation"])
         self.__create_tables()
         self.__seed_db()
         self.__close_connection()
