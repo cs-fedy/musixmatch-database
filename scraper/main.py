@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from scraper.data_scraper import ScrapeMusixMatch
 import tabulate
 import os
+import uuid
 
 load_dotenv(dotenv_path=r"../.env")
 
@@ -15,8 +16,6 @@ class DB:
         self.__POSTGRES_DB = os.getenv("POSTGRES_DB")
         self.__POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
         self.__POSTGRES_USER = os.getenv("POSTGRES_USER")
-        self.__current_album_id = 0
-        self.__current_song_id = 0
 
     def __connect(self):
         try:
@@ -99,11 +98,23 @@ class DB:
         self.connection.close()
         print("PostgreSQL connection is closed")
 
+    def __check_existence(self, column_name, column_value, table_name):
+        check_query = f"SELECT {column_name} FROM {table_name} WHERE {column_name} == {column_value}"
+        self.cursor.execute()
+        return len(self.cursor.fetchall()) != 0
+
     def __seed_genre_table(self, artist_id, genres_list):
-        for index, genre in enumerate(genres_list):
+        for genre in genres_list:
+            if self.__check_existence("genre_label", genre, "genre"):
+                return
+
+            genre_id = f"genre:{uuid.uuid1()}"
+            while self.__check_existence("genre_id", genre_id, "genre"):
+                genre_id = f"genre:{uuid.uuid1()}"
+
             seeding_genre_query = f""" 
                     INSERT INTO artist (genre_id, artist_id, genre_label)  
-                    VALUES ({index}, {artist_id}, {genre})
+                    VALUES ({genre_id}, {artist_id}, {genre})
             """
 
             self.cursor.execute(seeding_genre_query)
@@ -125,19 +136,22 @@ class DB:
 
     def __seed_song_table(self, album_id, songs):
         for song in songs:
+            song_id = f"song:{uuid.uuid1()}"
+            while self.__check_existence("song_id", song_id, "song"):
+                song_id = f"song:{uuid.uuid1()}"
+
             default_lyrics, details, translations = song.values()
             song_title, song_writer = details.values()
             seeding_song_query = f""" 
                     INSERT INTO artist (song_id, album_id, song_title, song_writer, song_lyrics)  
-                    VALUES ({self.__current_song_id},{album_id}, {song_title}, {song_writer}, {default_lyrics})
+                    VALUES ({song_id},{album_id}, {song_title}, {song_writer}, {default_lyrics})
             """
             self.cursor.execute(seeding_song_query)
             self.connection.commit()
 
             # seed translation table with songs translations
-            self.__seed_translation_table(self.__current_song_id, song_title, translations)
+            self.__seed_translation_table(song_id, song_title, translations)
             print(f"seeding song table with {song_title} details done")
-            self.__current_song_id += 1
 
     def __seed_translation_table(self, song_id, song_title, translations):
         if isinstance(translations, str):
@@ -145,7 +159,11 @@ class DB:
         else:
             translations_list = translations
 
-        for translation_id, translation in enumerate(translations_list):
+        for translation in translations_list:
+            translation_id = f"translation:{uuid.uuid1()}"
+            while self.__check_existence("translation_id", translation_id, "translation"):
+                translation_id = f"translation:{uuid.uuid1()}"
+
             language, lyrics = translation.values()
             seeding_translation_query = f""" 
                     INSERT INTO artist (translation_id, song_id, translation_language, translation)  
@@ -155,32 +173,39 @@ class DB:
             self.connection.commit()
             print(f"seeding translation table with {song_title} translation to {language=} details done")
 
-    def __seed_album_table(self, index, albums):
+    def __seed_album_table(self, artist_id, albums):
         for album in albums:
+            album_id = f"album:{uuid.uuid1()}"
+            while self.__check_existence("album_id", album_id, "album"):
+                album_id = f"album:{uuid.uuid1()}"
+
             album_picture, album_title, songs_data, album_release_date = album.values()
             seeding_album_query = f""" 
                     INSERT INTO artist (album_id, artist_id, album_pict, album_title, album_release_date)  
-                    VALUES ({index},{self.__current_album_id}, {index}, {album_picture}, {album_title}, {album_release_date})
+                    VALUES ({album_id}, {artist_id}, {album_picture}, {album_title}, {album_release_date})
             """
             self.cursor.execute(seeding_album_query)
             self.connection.commit()
 
             # seed songs table with album songs
-            self.__seed_song_table(self.__current_album_id, songs_data)
+            self.__seed_song_table(album_id, songs_data)
             print(f"seeding album table with {album_title} album done")
-            self.__current_album_id += 1
 
     def __seed_db(self):
         if not self.connection:
             return
 
         smm = ScrapeMusixMatch()
-        for index, artist in enumerate(smm()):
+        for artist in smm():
+            artist_id = f"artist:{uuid.uuid1()}"
+            while self.__check_existence("artist_id", artist_id, "artist"):
+                artist_id = f"artist:{uuid.uuid1()}"
+
             artist_details, artist_albums = artist.values()
             # seed artist table with artist details
-            self.__seed_artist_table(index, artist_details)
+            self.__seed_artist_table(artist_id, artist_details)
             # seed albums table with artist's albums
-            self.__seed_album_table(index, artist_albums)
+            self.__seed_album_table(artist_id, artist_albums)
             print("\n")
 
     def __drop_tables(self, tables_names):
